@@ -1,0 +1,241 @@
+import { useState, useRef, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Send } from "lucide-react";
+import { useChat } from "@/hooks/useChat";
+import { useAuth } from "@/hooks/useAuth";
+import { Message } from "@shared/schema";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+
+interface ChatMessageProps {
+  message: Message;
+}
+
+const UserMessage = ({ message }: ChatMessageProps) => (
+  <div className="message-bubble user-message">
+    <p>{message.content}</p>
+  </div>
+);
+
+const AIMessage = ({ message }: ChatMessageProps) => {
+  // Process message to find workout lists and details
+  const parts = message.content.split(/(\d+\.\s.*?:|\*\s|\-\s)/g);
+  
+  if (parts.length <= 1) {
+    return (
+      <div className="message-bubble ai-message">
+        <p>{message.content}</p>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="message-bubble ai-message">
+      {parts.map((part, index) => {
+        if (part.match(/^\d+\.\s.*?:/)) {
+          return <p key={index} className="font-semibold mt-2">{part}</p>;
+        } else if (part.match(/^\*\s|\-\s/)) {
+          return <li key={index} className="ml-4">{part.replace(/^\*\s|\-\s/, '')}</li>;
+        } else {
+          return <span key={index}>{part}</span>;
+        }
+      })}
+    </div>
+  );
+};
+
+export default function ChatInterface() {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const { 
+    messages, 
+    messageInput, 
+    setMessageInput, 
+    handleSendMessage: handleSendMessageHook,
+    isMessagesLoading,
+    isSendingMessage
+  } = useChat(user?.id || null);
+  
+  // Add a local state to store messages including pending ones
+  const [localMessages, setLocalMessages] = useState<Message[]>([]);
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const initialLoadRef = useRef(true);
+
+  // Initialize local messages once when server messages load
+  useEffect(() => {
+    if (messages.length > 0 && initialLoadRef.current) {
+      setLocalMessages(messages);
+      initialLoadRef.current = false;
+    }
+  }, [messages]);
+
+  // Scroll to bottom when local messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: initialLoad ? 'auto' : 'smooth' });
+      if (initialLoad && localMessages.length > 0) {
+        setInitialLoad(false);
+      }
+    }
+  }, [localMessages, initialLoad]);
+
+  // Create a custom send message handler
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!messageInput.trim() || isSendingMessage) return;
+    
+    // Create a temporary local message with a random id
+    const userMessage = {
+      id: Math.floor(Math.random() * -1000), // Using negative random ID to avoid conflicts
+      userId: user?.id || 0,
+      content: messageInput,
+      isUserMessage: true,
+      createdAt: new Date()
+    } as Message;
+    
+    // Add to local messages immediately
+    setLocalMessages(currentMessages => [...currentMessages, userMessage]);
+    
+    // Clear input
+    setMessageInput('');
+    
+    // Send to server using the hook's handler
+    try {
+      const response = await fetch('/api/chat/messages', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify({ message: messageInput })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Message sent successfully, response:", data);
+        
+        // Add AI response to local messages
+        if (data.aiMessage) {
+          const aiMessage = data.aiMessage as Message;
+          setLocalMessages(currentMessages => [...currentMessages.filter(m => m.id !== userMessage.id), 
+                                              {
+                                                id: data.userMessage.id,
+                                                userId: data.userMessage.userId,
+                                                content: data.userMessage.content,
+                                                isUserMessage: true,
+                                                createdAt: new Date(data.userMessage.createdAt)
+                                              } as Message, 
+                                              aiMessage]);
+          
+          // Log the received messages
+          console.log("User message received:", data.userMessage);
+          console.log("AI message received:", data.aiMessage);
+          
+          // Log workouts and training plan if received
+          if (data.workouts && data.workouts.length) {
+            console.log("Workouts created:", data.workouts.length);
+          }
+          if (data.trainingPlan) {
+            console.log("Training plan created:", data.trainingPlan.title);
+          }
+        }
+      } else {
+        // Handle error response
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        console.error("Error response:", response.status, errorData);
+        
+        if (response.status === 401 || response.status === 403) {
+          // Token issue - attempt to redirect user to re-authenticate
+          toast({
+            title: "Session expired",
+            description: "Please login again to continue chatting.",
+            variant: "destructive"
+          });
+          
+          // Wait a moment before redirecting
+          setTimeout(() => {
+            window.location.href = '/auth';
+          }, 2000);
+        } else {
+          // For other errors, just show a toast
+          toast({
+            title: "Error sending message",
+            description: errorData.message || "Please try again later",
+            variant: "destructive"
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+    }
+  };
+  
+  // Debug messages with additional visibility on isUserMessage flag
+  console.log("ChatInterface messages:", messages.map((msg: Message) => ({
+    id: msg.id,
+    content: msg.content.substring(0, 30) + "...",
+    isUserMessage: msg.isUserMessage
+  })));
+  console.log("Local messages:", localMessages.map((msg: Message) => ({
+    id: msg.id || 'temp',
+    content: msg.content.substring(0, 30) + "...",
+    isUserMessage: msg.isUserMessage
+  })));
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Chat messages */}
+      <div className="flex-1 overflow-y-auto p-4 bg-neutral-50">
+        <div className="flex flex-col space-y-3">
+          {isMessagesLoading ? (
+            // Loading skeleton
+            <>
+              <Skeleton className="h-16 w-3/4 self-start rounded-lg" />
+              <Skeleton className="h-10 w-1/2 self-end rounded-lg" />
+              <Skeleton className="h-24 w-3/4 self-start rounded-lg" />
+            </>
+          ) : localMessages.length === 0 && messages.length === 0 ? (
+            // Welcome message when no messages
+            <div className="message-bubble ai-message">
+              <p>Welcome to RunCoach AI! I'm your personal running coach. How can I help you today?</p>
+            </div>
+          ) : (
+            // Actual messages - use localMessages instead of server messages
+            localMessages.map((message: Message) => (
+              message.isUserMessage ? (
+                <UserMessage key={message.id} message={message} />
+              ) : (
+                <AIMessage key={message.id} message={message} />
+              )
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+      
+      {/* Chat input */}
+      <div className="bg-white border-t border-neutral-200 px-4 py-3">
+        <form onSubmit={handleSendMessage} className="flex items-center">
+          <Input 
+            value={messageInput}
+            onChange={(e) => setMessageInput(e.target.value)}
+            className="flex-1 rounded-full"
+            placeholder="Type a message..."
+            disabled={isSendingMessage}
+          />
+          <Button 
+            type="submit" 
+            size="icon"
+            className="ml-2 rounded-full" 
+            disabled={!messageInput.trim() || isSendingMessage}
+          >
+            <Send className="h-5 w-5" />
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+}
