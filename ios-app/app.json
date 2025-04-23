@@ -17,7 +17,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ajohnson23.runcoach",
-      "buildNumber": "1.0.0"
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -41,7 +43,7 @@
       "policy": "sdkVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/115a5d85-9c6e-42ba-af76-03a87abd8ee4",
+      "url": "https://u.expo.dev/5d977089-8c95-4b37-ba75-399616a14aa3",
       "enabled": true,
       "fallbackToCacheTimeout": 0
     },
