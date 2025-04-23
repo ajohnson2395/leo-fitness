@@ -46,7 +46,7 @@
   },
   "hooks": {
     "prebuild": [
-      "./eas-build-pre-install.sh"
+      "eas-build-pre-install.sh"
     ]
   }
 }
