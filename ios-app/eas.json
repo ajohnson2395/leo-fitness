@@ -17,17 +17,36 @@
     "production": {
       "distribution": "store",
       "ios": {
-        "resourceClass": "default"
+        "resourceClass": "default",
+        "credentialsSource": "remote",
+        "ascApiKeyPath": "private/AuthKey_${ASC_API_KEY_ID}.p8",
+        "ascApiKeyId": "${ASC_API_KEY_ID}",
+        "ascApiKeyIssuerId": "${ASC_API_KEY_ISSUER_ID}"
+      },
+      "env": {
+        "ASC_API_KEY_ID": "${ASC_API_KEY_ID}",
+        "ASC_API_KEY_ISSUER_ID": "${ASC_API_KEY_ISSUER_ID}",
+        "ASC_API_KEY_CONTENT": "${ASC_API_KEY_CONTENT}",
+        "APPLE_TEAM_ID": "${APPLE_TEAM_ID}",
+        "APPLE_ID": "${APPLE_ID}",
+        "APPLE_APP_SPECIFIC_PASSWORD": "${APPLE_APP_SPECIFIC_PASSWORD}"
       }
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleId": "andrewtysonj@yahoo.com",
-        "ascAppId": "G2G5ZK28X6",
-        "appleTeamId": "8CQVV56AFH"
+        "appleId": "${APPLE_ID}",
+        "appleTeamId": "${APPLE_TEAM_ID}"
       }
     }
+  },
+  "cli": {
+    "appVersionSource": "remote"
+  },
+  "hooks": {
+    "prebuild": [
+      "./eas-build-pre-install.sh"
+    ]
   }
 }
