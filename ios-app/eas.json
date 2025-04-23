@@ -41,9 +41,6 @@
       }
     }
   },
-  "cli": {
-    "appVersionSource": "remote"
-  },
   "hooks": {
     "prebuild": [
       "eas-build-pre-install.sh"
